@@ -1,0 +1,11 @@
+--- a/feed/app/mt798x-2p5g-phy-firmware-internal/Makefile
++++ b/feed/app/mt798x-2p5g-phy-firmware-internal/Makefile
+@@ -11,7 +11,7 @@ define KernelPackage/mt798x-2p5g-phy
+   SECTION:=kernel
+   SUBMENU:=Network Devices
+   TITLE:=MediaTek MT798x 2.5G PHY driver
+-  DEPENDS:=@TARGET_mediatek +mt798x-2p5g-phy-firmware-internal
++  DEPENDS:=@TARGET_mediatek +mt7987-2p5g-phy-firmware
+   KCONFIG:=CONFIG_MEDIATEK_2P5GE_PHY=m
+   FILES:=$(LINUX_DIR)/drivers/net/phy/mediatek/mtk-2p5ge.ko
+   AUTOLOAD:=$(call AutoLoad,73,mtk-2p5ge)

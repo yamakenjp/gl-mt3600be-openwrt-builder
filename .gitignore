@@ -1,0 +1,39 @@
+# Local toolchains and upstream worktrees
+/.tools/
+/openwrt/
+/mtk-openwrt-feeds/
+/work/
+
+# Build output is published as GitHub Release assets, not Git objects
+/output/
+/output-repro/
+*.bin
+*.img
+*.itb
+*.ubi
+*.ubifs
+*.squashfs
+*.apk
+
+# Generated build directories and logs
+build_dir/
+staging_dir/
+tmp/
+logs/
+dl/
+*.log
+
+# Never commit generated signing material or credentials
+**/private-key.pem
+**/public-key.pem
+*.key
+*.pem
+*.p12
+*.pfx
+.env
+.env.*
+
+# Editor and OS state
+.DS_Store
+*.swp
+*~
