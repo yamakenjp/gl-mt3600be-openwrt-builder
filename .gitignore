@@ -3,6 +3,7 @@
 /openwrt/
 /mtk-openwrt-feeds/
 /work/
+/.cache/
 
 # Build output is published as GitHub Release assets, not Git objects
 /output/

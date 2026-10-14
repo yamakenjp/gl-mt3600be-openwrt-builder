@@ -109,6 +109,19 @@ WORK_DIR=/path/to/build-work OUTPUT_DIR=/path/to/result \
 
 `.github/workflows/build-release.yml`は、固定されたtag名についてクリーンなGitHub runner上で同じ手順を実行し、構成・チェックサム・Tailscale versionを検証してpre-releaseを作成します。
 
+Actionsの再実行時間を抑えるため、checksumで検証されるdownload archive、Go module/build cache、最大2 GiBのcompiler cacheだけをビルド入力hashごとに再利用します。MediaTekの事前処理で取得するarchiveも同じdownload cacheを使い、ビルド途中で失敗した場合は再開用のpartial cacheを別keyで保存します。kernel build tree、`staging_dir`、rootfsはcacheから再利用せず、毎回クリーンに組み立てます。
+
+ビルドとRelease検査は別jobです。正常に生成されchecksum検査を通った完成出力は、短期artifactに加えてビルド入力hashが完全一致する専用cacheにも保存します。そのため検査処理だけの再実行や、検査workflowだけを修正した場合は、同じファームを復元して長時間の再コンパイルを避けられます。
+
+ローカルでも同じcache機構を使う場合は、OpenWrt作業treeの外にある空白を含まない絶対pathを指定します。`COMPILER_CACHE_DIR`を使う場合は`ccache`が必要です。
+
+```sh
+DOWNLOAD_CACHE_DIR=/path/to/cache/downloads \
+COMPILER_CACHE_DIR=/path/to/cache/ccache \
+GOLANG_BUILD_CACHE_DIR=/path/to/cache/go-build \
+bash ./build-beryl7-mtk.sh
+```
+
 ## 配布イメージ導入後の注意
 
 ### MediaTekローカルfeed行

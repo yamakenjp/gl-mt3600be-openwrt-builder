@@ -38,6 +38,9 @@ MTK_FEED_DIR="${WORK_DIR}/mtk-openwrt-feeds"
 JOBS="${JOBS:-2}"
 DOWNLOAD_JOBS="${DOWNLOAD_JOBS:-4}"
 AUTOREMOVE="${AUTOREMOVE:-1}"
+DOWNLOAD_CACHE_DIR="${DOWNLOAD_CACHE_DIR:-}"
+COMPILER_CACHE_DIR="${COMPILER_CACHE_DIR:-}"
+GOLANG_BUILD_CACHE_DIR="${GOLANG_BUILD_CACHE_DIR:-}"
 
 die() {
     printf 'ERROR: %s\n' "$*" >&2
@@ -50,6 +53,32 @@ note() {
 
 require_command() {
     command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"
+}
+
+prepare_cache_dir() {
+    local label="$1"
+    local cache_dir="$2"
+    local resolved_dir
+    local resolved_home=""
+
+    [[ "${cache_dir}" == /* ]] || \
+        die "${label} must be an absolute path: ${cache_dir}"
+    [[ "${cache_dir}" != "/" ]] || die "${label} must not be /"
+    [[ "${cache_dir}" != "${HOME:-/nonexistent}" ]] || \
+        die "${label} must not be the home directory"
+    [[ "${cache_dir}" =~ ^/[-A-Za-z0-9._/@%+,=:]+$ ]] || \
+        die "${label} contains characters unsafe for OpenWrt make recipes"
+
+    mkdir -p -- "${cache_dir}"
+    resolved_dir="$(CDPATH= cd -- "${cache_dir}" && pwd -P)"
+    [[ "${resolved_dir}" != "/" ]] || \
+        die "${label} resolves to /"
+    if [[ -n "${HOME:-}" && -d "${HOME}" ]]; then
+        resolved_home="$(CDPATH= cd -- "${HOME}" && pwd -P)"
+        [[ "${resolved_dir}" != "${resolved_home}" ]] || \
+            die "${label} resolves to the home directory"
+    fi
+    printf '%s\n' "${resolved_dir}"
 }
 
 for command_name in bash git make gcc g++ awk patch perl python3 rsync swig unzip wget file sha256sum; do
@@ -69,6 +98,35 @@ done
 [[ "${WORK_DIR}" != "${HOME:-/nonexistent}" ]] || die "WORK_DIR must not be the home directory"
 
 mkdir -p "${WORK_DIR}"
+
+if [[ -n "${DOWNLOAD_CACHE_DIR}" ]]; then
+    DOWNLOAD_CACHE_DIR="$(
+        prepare_cache_dir "DOWNLOAD_CACHE_DIR" "${DOWNLOAD_CACHE_DIR}"
+    )"
+fi
+if [[ -n "${COMPILER_CACHE_DIR}" ]]; then
+    require_command ccache
+    COMPILER_CACHE_DIR="$(
+        prepare_cache_dir "COMPILER_CACHE_DIR" "${COMPILER_CACHE_DIR}"
+    )"
+fi
+if [[ -n "${GOLANG_BUILD_CACHE_DIR}" ]]; then
+    GOLANG_BUILD_CACHE_DIR="$(
+        prepare_cache_dir "GOLANG_BUILD_CACHE_DIR" \
+            "${GOLANG_BUILD_CACHE_DIR}"
+    )"
+fi
+
+declare -a make_cache_args=()
+if [[ -n "${DOWNLOAD_CACHE_DIR}" ]]; then
+    make_cache_args+=("DL_DIR=${DOWNLOAD_CACHE_DIR}")
+fi
+if [[ -n "${COMPILER_CACHE_DIR}" ]]; then
+    make_cache_args+=("CONFIG_CCACHE=y" "CCACHE_DIR=${COMPILER_CACHE_DIR}")
+fi
+if [[ -n "${GOLANG_BUILD_CACHE_DIR}" ]]; then
+    make_cache_args+=("GO_BUILD_CACHE_DIR=${GOLANG_BUILD_CACHE_DIR}")
+fi
 
 openwrt_was_cloned=0
 if [[ ! -e "${OPENWRT_DIR}" ]]; then
@@ -140,18 +198,27 @@ note "Preparing OpenWrt with the MediaTek ${MTK_PROFILE} profile"
 (
     cd "${OPENWRT_DIR}"
 
+    declare -a prepare_env=(
+        GIT_CONFIG_COUNT=4
+        GIT_CONFIG_KEY_0=url.https://github.com/openwrt/packages.git.insteadOf
+        GIT_CONFIG_VALUE_0=https://git.openwrt.org/feed/packages.git
+        GIT_CONFIG_KEY_1=url.https://github.com/openwrt/luci.git.insteadOf
+        GIT_CONFIG_VALUE_1=https://git.openwrt.org/project/luci.git
+        GIT_CONFIG_KEY_2=url.https://github.com/openwrt/routing.git.insteadOf
+        GIT_CONFIG_VALUE_2=https://git.openwrt.org/feed/routing.git
+        GIT_CONFIG_KEY_3=url.https://github.com/openwrt/telephony.git.insteadOf
+        GIT_CONFIG_VALUE_3=https://git.openwrt.org/feed/telephony.git
+    )
+    if [[ -n "${DOWNLOAD_CACHE_DIR}" ]]; then
+        # The MediaTek prepare stage invokes make before our explicit OpenWrt
+        # download target.  MAKEFLAGS makes those nested invocations use the
+        # same verified archive cache as the main build.
+        prepare_env+=("MAKEFLAGS=DL_DIR=${DOWNLOAD_CACHE_DIR}")
+    fi
+
     # Use the official GitHub mirrors for the standard OpenWrt feeds. The
     # pinned object IDs remain the same as on git.openwrt.org.
-    env \
-        GIT_CONFIG_COUNT=4 \
-        GIT_CONFIG_KEY_0='url.https://github.com/openwrt/packages.git.insteadOf' \
-        GIT_CONFIG_VALUE_0='https://git.openwrt.org/feed/packages.git' \
-        GIT_CONFIG_KEY_1='url.https://github.com/openwrt/luci.git.insteadOf' \
-        GIT_CONFIG_VALUE_1='https://git.openwrt.org/project/luci.git' \
-        GIT_CONFIG_KEY_2='url.https://github.com/openwrt/routing.git.insteadOf' \
-        GIT_CONFIG_VALUE_2='https://git.openwrt.org/feed/routing.git' \
-        GIT_CONFIG_KEY_3='url.https://github.com/openwrt/telephony.git.insteadOf' \
-        GIT_CONFIG_VALUE_3='https://git.openwrt.org/feed/telephony.git' \
+    env "${prepare_env[@]}" \
         bash "${MTK_FEED_DIR}/autobuild/unified/autobuild.sh" \
         "${MTK_PROFILE}" prepare
 )
@@ -309,13 +376,16 @@ selected_devices="$(
     die "Unexpected target selection after make defconfig: ${selected_devices:-none}"
 
 note "Downloading source archives"
-make -C "${OPENWRT_DIR}" download -j"${DOWNLOAD_JOBS}"
+make -C "${OPENWRT_DIR}" "${make_cache_args[@]}" \
+    download -j"${DOWNLOAD_JOBS}"
 
 note "Building firmware with ${JOBS} parallel jobs"
 if [[ "${AUTOREMOVE}" == "1" ]]; then
-    make -C "${OPENWRT_DIR}" -j"${JOBS}" BUILD_LOG=1 CONFIG_AUTOREMOVE=1
+    make -C "${OPENWRT_DIR}" "${make_cache_args[@]}" \
+        -j"${JOBS}" BUILD_LOG=1 CONFIG_AUTOREMOVE=1
 else
-    make -C "${OPENWRT_DIR}" -j"${JOBS}" BUILD_LOG=1
+    make -C "${OPENWRT_DIR}" "${make_cache_args[@]}" \
+        -j"${JOBS}" BUILD_LOG=1
 fi
 
 target_bin="${OPENWRT_DIR}/bin/targets/mediatek/filogic"

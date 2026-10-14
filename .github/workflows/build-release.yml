@@ -9,14 +9,14 @@ on:
         default: v25.12-snapshot-20261015.2
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: beryl7-firmware-release
   cancel-in-progress: false
 
 jobs:
-  build-release:
+  build-firmware:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -26,7 +26,9 @@ jobs:
 
     steps:
       - name: Check out the tagged recipe
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Validate release request
         shell: bash
@@ -45,7 +47,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Restore a completed identical firmware build
+        id: output_cache
+        uses: actions/cache/restore@v6
+        continue-on-error: true
+        with:
+          path: output-repro
+          key: >-
+            beryl7-output-${{ runner.os }}-${{ hashFiles('build-beryl7-mtk.sh', 'configs/**', 'patches/**', 'files/**') }}
+
+      - name: Restore reusable build caches
+        if: steps.output_cache.outputs.cache-hit != 'true'
+        id: build_cache
+        uses: actions/cache/restore@v6
+        continue-on-error: true
+        with:
+          path: |
+            .cache/openwrt-downloads
+            .cache/ccache
+            .cache/go-build
+          key: >-
+            beryl7-build-${{ runner.os }}-${{ hashFiles('build-beryl7-mtk.sh', 'configs/**', 'patches/**', 'files/**') }}
+          restore-keys: |
+            beryl7-build-${{ runner.os }}-
+
       - name: Prepare the clean build host
+        if: steps.output_cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -58,26 +85,112 @@ jobs:
           sudo apt-get clean
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
-            bison build-essential clang file flex gawk gettext git \
+            bison build-essential ccache clang file flex gawk gettext git \
             libelf-dev libncurses-dev libssl-dev python3 \
             python3-pyelftools python3-setuptools rsync squashfs-tools \
             swig unzip wget zlib1g-dev
           df -h .
 
       - name: Build the firmware
+        if: steps.output_cache.outputs.cache-hit != 'true'
+        id: build_firmware
         shell: bash
         run: |
           set -Eeuo pipefail
+          mkdir -p \
+            "${GITHUB_WORKSPACE}/.cache/openwrt-downloads" \
+            "${GITHUB_WORKSPACE}/.cache/ccache" \
+            "${GITHUB_WORKSPACE}/.cache/go-build"
+          CCACHE_DIR="${GITHUB_WORKSPACE}/.cache/ccache" \
+            ccache --max-size=2G
           JOBS=2 DOWNLOAD_JOBS=4 AUTOREMOVE=1 \
+            DOWNLOAD_CACHE_DIR="${GITHUB_WORKSPACE}/.cache/openwrt-downloads" \
+            COMPILER_CACHE_DIR="${GITHUB_WORKSPACE}/.cache/ccache" \
+            GOLANG_BUILD_CACHE_DIR="${GITHUB_WORKSPACE}/.cache/go-build" \
             bash ./build-beryl7-mtk.sh
 
+      - name: Save reusable build caches
+        if: >-
+          ${{ always() && steps.build_firmware.outcome == 'success' && steps.build_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: |
+            .cache/openwrt-downloads
+            .cache/ccache
+            .cache/go-build
+          key: ${{ steps.build_cache.outputs.cache-primary-key }}
+
+      - name: Save partial caches after a failed build
+        if: >-
+          ${{ always() && steps.build_firmware.outcome == 'failure' && steps.build_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: |
+            .cache/openwrt-downloads
+            .cache/ccache
+            .cache/go-build
+          key: >-
+            ${{ steps.build_cache.outputs.cache-primary-key }}-partial-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save the completed firmware for verification retries
+        if: >-
+          ${{ steps.output_cache.outputs.cache-hit != 'true' && steps.build_firmware.outcome == 'success' }}
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: output-repro
+          key: ${{ steps.output_cache.outputs.cache-primary-key }}
+
       - name: Preserve the completed build for verification
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: beryl7-output-${{ github.run_id }}
           path: output-repro/
           if-no-files-found: error
           retention-days: 3
+          compression-level: 0
+
+  verify-release:
+    if: github.ref == 'refs/heads/main'
+    needs: build-firmware
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Check out the tagged recipe
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Restore the completed firmware
+        id: output_cache
+        uses: actions/cache/restore@v6
+        continue-on-error: true
+        with:
+          path: output-repro
+          key: >-
+            beryl7-output-${{ runner.os }}-${{ hashFiles('build-beryl7-mtk.sh', 'configs/**', 'patches/**', 'files/**') }}
+
+      - name: Download the completed firmware
+        if: steps.output_cache.outputs.cache-hit != 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: beryl7-output-${{ github.run_id }}
+          path: output-repro
+
+      - name: Prepare the verification host
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends squashfs-tools
 
       - name: Verify release contents
         shell: bash
