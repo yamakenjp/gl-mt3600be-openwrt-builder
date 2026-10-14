@@ -166,6 +166,17 @@ note "Selecting only the GL.iNET GL-MT3600BE image"
 install -m 0644 "${CONFIG_SEED}" "${OPENWRT_DIR}/.config"
 make -C "${OPENWRT_DIR}" defconfig
 
+grep -Fqx 'CONFIG_FEED_mtk_openwrt_feed=m' "${OPENWRT_DIR}/.config" || \
+    die "The build-only MediaTek feed must be disabled in runtime repositories"
+for translation_package in \
+        luci-i18n-base-ja \
+        luci-i18n-firewall-ja \
+        luci-i18n-package-manager-ja; do
+    translation_symbol="CONFIG_PACKAGE_${translation_package}=y"
+    grep -Fqx "${translation_symbol}" "${OPENWRT_DIR}/.config" || \
+        die "Japanese LuCI package was not selected: ${translation_package}"
+done
+
 selected_devices="$(
     grep -E '^CONFIG_TARGET_DEVICE_mediatek_filogic_DEVICE_.*=y$' \
         "${OPENWRT_DIR}/.config" || true

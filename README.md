@@ -44,7 +44,7 @@ Wi-Fi 7の全モード、2.5GbEの長時間安定性、hardware offload、USB、
 | LuCI feed | `11264f9297b0ad272f0bd2f288b088f71bf63918` |
 | routing feed | `5b23ea12d417e5dba99788c5b34abdae81cccf33` |
 
-デバイス設定は[`configs/beryl7-mtk.config`](configs/beryl7-mtk.config)です。Beryl 7のみを対象にし、LuCI、relay、MediaTek flow-offload補助、USBストレージ関連を含め、HQA / デバッグ用途のパッケージは外しています。
+デバイス設定は[`configs/beryl7-mtk.config`](configs/beryl7-mtk.config)です。Beryl 7のみを対象にし、LuCIと日本語翻訳、relay、MediaTek flow-offload補助、USBストレージ関連を含め、HQA / デバッグ用途のパッケージは外しています。
 
 Beryl 7の公式デバイス定義が選ぶ`mt7987-2p5g-phy-firmware`と、MediaTek公開feedの2.5GbE driver `kmod-mt798x-2p5g-phy`を組み合わせます。MediaTek側driverの依存先を内部版firmwareから公式MT7987 firmwareへ変更する処理は、[`patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.patch`](patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.patch)として明示しています。
 
@@ -95,7 +95,7 @@ WORK_DIR=/path/to/build-work OUTPUT_DIR=/path/to/result \
 
 ### MediaTekローカルfeed行
 
-初回Releaseのイメージには、ビルド時だけ存在する`mtk_openwrt_feed`が誤って配布リポジトリとして残っています。このfeedはOpenWrt公式サーバーにはないため、導入後に一度だけ削除してください。組み込み済みMediaTek driverやパッケージは削除されません。
+初回Release（`v25.12-snapshot-20261006`）のイメージには、ビルド時だけ存在する`mtk_openwrt_feed`が誤って配布リポジトリとして残っています。このfeedはOpenWrt公式サーバーにはないため、導入後に一度だけ削除してください。組み込み済みMediaTek driverやパッケージは削除されません。現在の`main`はこのfeedをコメントアウトして生成します。
 
 ```sh
 cp -p /etc/apk/repositories.d/distfeeds.list /root/distfeeds.list.bak
@@ -104,6 +104,8 @@ apk update
 ```
 
 ### LuCIの日本語化
+
+現在の`main`から作るイメージには日本語翻訳を組み込みます。初回Releaseへ後から追加する場合は次を実行します。
 
 ```sh
 apk add luci-i18n-base-ja luci-i18n-firewall-ja luci-i18n-package-manager-ja
