@@ -22,6 +22,7 @@ readonly PACKAGES_SHA="ab3b874a7df14e99179d5f17b77284ad66fa18b7"
 readonly LUCI_SHA="11264f9297b0ad272f0bd2f288b088f71bf63918"
 readonly ROUTING_SHA="5b23ea12d417e5dba99788c5b34abdae81cccf33"
 readonly TAILSCALE_PACKAGE_COMMIT="5d6ecf4803ed041c9f76271e1d1e27e976a68c72"
+readonly GOLANG_PACKAGE_COMMIT="54fab7fa4224193a121f49a9f39dafd9323a0b2d"
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="${WORK_DIR:-${SCRIPT_DIR}/work}"
@@ -31,6 +32,7 @@ FILES_OVERLAY="${SCRIPT_DIR}/files"
 MTK_2P5G_PATCH="${SCRIPT_DIR}/patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.patch"
 TAILSCALE_PATCH="${SCRIPT_DIR}/patches/0002-tailscale-1.102.3.patch"
 FAN_CURVE_PATCH="${SCRIPT_DIR}/patches/0003-beryl7-thermal-fan-curve.patch"
+GOLANG_PATCH="${SCRIPT_DIR}/patches/0004-golang-1.26.9.patch"
 OPENWRT_DIR="${WORK_DIR}/openwrt"
 MTK_FEED_DIR="${WORK_DIR}/mtk-openwrt-feeds"
 JOBS="${JOBS:-2}"
@@ -62,6 +64,7 @@ done
 [[ -f "${MTK_2P5G_PATCH}" ]] || die "2.5GbE integration patch not found: ${MTK_2P5G_PATCH}"
 [[ -f "${TAILSCALE_PATCH}" ]] || die "Tailscale backport patch not found: ${TAILSCALE_PATCH}"
 [[ -f "${FAN_CURVE_PATCH}" ]] || die "Beryl 7 fan curve patch not found: ${FAN_CURVE_PATCH}"
+[[ -f "${GOLANG_PATCH}" ]] || die "Go backport patch not found: ${GOLANG_PATCH}"
 [[ "${WORK_DIR}" != "/" ]] || die "WORK_DIR must not be /"
 [[ "${WORK_DIR}" != "${HOME:-/nonexistent}" ]] || die "WORK_DIR must not be the home directory"
 
@@ -169,8 +172,31 @@ grep -Fqx '  DEPENDS:=@TARGET_mediatek +mt7987-2p5g-phy-firmware' \
     "${MTK_FEED_DIR}/${mtk_2p5g_makefile}" || \
     die "The MediaTek 2.5GbE driver does not depend on the expected MT7987 firmware"
 
-note "Backporting Tailscale 1.102.3 from OpenWrt packages ${TAILSCALE_PACKAGE_COMMIT}"
 packages_feed_dir="${OPENWRT_DIR}/feeds/packages"
+golang_makefile="${packages_feed_dir}/lang/golang/golang1.26/Makefile"
+[[ -f "${golang_makefile}" ]] || \
+    die "Prepared packages feed does not contain the Go 1.26 recipe"
+
+# This is applied before the lower-numbered Tailscale patch because it is the
+# host build prerequisite for that package.
+note "Backporting Go 1.26.9 from OpenWrt packages ${GOLANG_PACKAGE_COMMIT}"
+if patch --dry-run --batch --forward -p1 -d "${packages_feed_dir}" \
+        <"${GOLANG_PATCH}" >/dev/null 2>&1; then
+    patch --batch --forward -p1 -d "${packages_feed_dir}" <"${GOLANG_PATCH}"
+elif patch --dry-run --batch --reverse -p1 -d "${packages_feed_dir}" \
+        <"${GOLANG_PATCH}" >/dev/null 2>&1; then
+    note "The Go 1.26.9 patch is already applied"
+else
+    die "The Go 1.26.9 patch is neither applicable nor already applied"
+fi
+
+grep -Fqx 'GO_VERSION_PATCH:=9' "${golang_makefile}" || \
+    die "Unexpected Go 1.26 patch version after backport"
+grep -Fqx \
+    'PKG_HASH:=9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca' \
+    "${golang_makefile}" || die "Unexpected Go 1.26.9 source hash"
+
+note "Backporting Tailscale 1.102.3 from OpenWrt packages ${TAILSCALE_PACKAGE_COMMIT}"
 [[ -d "${packages_feed_dir}/net/tailscale" ]] || \
     die "Prepared packages feed does not contain net/tailscale"
 if patch --dry-run --batch --forward -p1 -d "${packages_feed_dir}" \

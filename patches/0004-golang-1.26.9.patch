@@ -1,0 +1,28 @@
+From: Beryl 7 reproducible build <beryl7-build@localhost>
+Subject: [PATCH] golang: backport 1.26.9 from openwrt-25.12
+
+Tailscale 1.102.3 declares Go 1.26.6 as its minimum toolchain.  The
+source-pinned packages feed still contains Go 1.26.1 and OpenWrt forces
+GOTOOLCHAIN=local, so the Tailscale build otherwise exits before compiling.
+
+Use the final recipe state from OpenWrt packages commit
+54fab7fa4224193a121f49a9f39dafd9323a0b2d, folding the intervening Go 1.26
+patch releases into this source-pinned feed.  The resulting 1.26.9 recipe also
+carries the current Go 1.26 security fixes.
+
+---
+ lang/golang/golang1.26/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lang/golang/golang1.26/Makefile b/lang/golang/golang1.26/Makefile
+index 6b364fb..fa33ddd 100644
+--- a/lang/golang/golang1.26/Makefile
++++ b/lang/golang/golang1.26/Makefile
+@@ -11 +11 @@
+-GO_VERSION_PATCH:=1
++GO_VERSION_PATCH:=9
+@@ -14 +14 @@
+-PKG_HASH:=3172293d04b209dc1144698e7ba13f0477f6ba8c5ffd0be66c20fdbc9785dfbb
++PKG_HASH:=9735d7dcdb65b35d3fa577f04064737c03b89cf1a2b71e6e69fe2f3c6f9fd4ca
+-- 
+2.47.3

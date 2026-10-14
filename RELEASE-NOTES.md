@@ -13,6 +13,7 @@ OpenWrt 25.12-SNAPSHOTとMediaTek公開feed（MP4.3）を組み合わせた、GL
 ## `beryl7.2`の追加内容
 
 - Tailscale 1.102.3と一致する`kmod-tun`
+- Tailscaleのビルドに使うhost Go toolchainを、公式OpenWrt 25.12由来の1.26.9へ更新
 - LuCI日本語翻訳を初期イメージへ同梱
 - WireGuard tools/LuCI、veth、SQM/CAKE tools/LuCI、nftables socket/tproxy module
 - Android/iPhone USBテザリング（iPhone pairing toolsを含む）、MBIM/QMI/NCM modem、主要USB Ethernet adapter
@@ -52,7 +53,7 @@ tailscale up --accept-dns=false
 
 ## 重要な注意
 
-- 書き込み前に`shasum -a 256 -c SHA256SUMS`で照合してください。
+- sysupgradeイメージと`SHA256SUMS`を同じ場所へ保存し、書き込み前に`grep 'squashfs-sysupgrade\.bin$' SHA256SUMS | shasum -a 256 -c -`で照合してください。
 - `apk upgrade`の一括実行は避けてください。
 - 公式snapshotの`kmod-*`を強制導入しないでください。
 - GL-MT3600BE以外へ書き込まないでください。

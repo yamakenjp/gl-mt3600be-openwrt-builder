@@ -14,10 +14,10 @@ GL.iNET Beryl 7（GL-MT3600BE）向けの、ソースrevisionを固定したカ�
 
 このプロジェクトは`factory`イメージを生成しません。bootloader / BL2イメージも配布しません。
 
-ダウンロード後は必ず確認してください。
+通常更新用のsysupgradeイメージと`SHA256SUMS`を同じディレクトリへダウンロードし、必ず確認してください。
 
 ```sh
-shasum -a 256 -c SHA256SUMS
+grep 'squashfs-sysupgrade\.bin$' SHA256SUMS | shasum -a 256 -c -
 ```
 
 ## 実機確認状況
@@ -42,7 +42,8 @@ shasum -a 256 -c SHA256SUMS
 | MediaTek公開feed（MP4.3） | `9b5754e3a361635595ea31a14176b14169e69d18` |
 | MediaTek autobuild profile | `filogic-mac80211-mt7987_rfb-mt7990` |
 | packages feed | `ab3b874a7df14e99179d5f17b77284ad66fa18b7` |
-| Tailscale recipe backport | `5d6ecf4803ed041c9f76271e1d1e27e976a68c72`（1.102.3） |
+| Tailscale recipe final state | `5d6ecf4803ed041c9f76271e1d1e27e976a68c72`（1.102.3） |
+| Host Go recipe final state | `54fab7fa4224193a121f49a9f39dafd9323a0b2d`（1.26.9） |
 | LuCI feed | `11264f9297b0ad272f0bd2f288b088f71bf63918` |
 | routing feed | `5b23ea12d417e5dba99788c5b34abdae81cccf33` |
 
@@ -61,7 +62,7 @@ HQA / デバッグ用途のパッケージは外しています。MT7988専用�
 
 Beryl 7の公式デバイス定義が選ぶ`mt7987-2p5g-phy-firmware`と、MediaTek公開feedの2.5GbE driver `kmod-mt798x-2p5g-phy`を組み合わせます。MediaTek側driverの依存先を内部版firmwareから公式MT7987 firmwareへ変更する処理は、[`patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.patch`](patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.patch)として明示しています。
 
-Tailscale更新は[`patches/0002-tailscale-1.102.3.patch`](patches/0002-tailscale-1.102.3.patch)、自動ファンカーブは[`patches/0003-beryl7-thermal-fan-curve.patch`](patches/0003-beryl7-thermal-fan-curve.patch)として分離しています。ファンはCPUまたは2.5GbEの高い方を基準に、50/60/70/80℃でPWM 128/176/224/255へ上げ、各段に5℃のヒステリシスを持たせます。最初の段には実機で回転を確認したPWM 128を使用します。
+Tailscale更新は[`patches/0002-tailscale-1.102.3.patch`](patches/0002-tailscale-1.102.3.patch)、自動ファンカーブは[`patches/0003-beryl7-thermal-fan-curve.patch`](patches/0003-beryl7-thermal-fan-curve.patch)、Tailscaleの最低要件を満たすGo 1.26.9更新は[`patches/0004-golang-1.26.9.patch`](patches/0004-golang-1.26.9.patch)として分離しています。ファンはCPUまたは2.5GbEの高い方を基準に、50/60/70/80℃でPWM 128/176/224/255へ上げ、各段に5℃のヒステリシスを持たせます。最初の段には実機で回転を確認したPWM 128を使用します。
 
 ここでいう「ソース固定」は取得revisionを固定するという意味です。ホストtoolchain、署名鍵、commit timestampなども含めたbit-for-bit reproducible buildは保証しません。
 
