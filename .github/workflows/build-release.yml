@@ -71,6 +71,14 @@ jobs:
           JOBS=2 DOWNLOAD_JOBS=4 AUTOREMOVE=1 \
             bash ./build-beryl7-mtk.sh
 
+      - name: Preserve the completed build for verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: beryl7-output-${{ github.run_id }}
+          path: output-repro/
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Verify release contents
         shell: bash
         run: |
