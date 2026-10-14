@@ -1,67 +1,81 @@
-# GL-MT3600BE custom build result
+# GL-MT3600BE `beryl7.2` build result
 
-Build completed on 2026-10-06. The sysupgrade image was subsequently
-installed on a GL-MT3600BE and booted successfully.
-
-## Firmware
+The reproducible GitHub Actions build completed successfully on 2026-10-15
+(JST). The workflow built the firmware, verified the release contents, and
+published the immutable pre-release.
 
 | Item | Value |
 |---|---|
-| Target | `mediatek/filogic` |
-| Profile | `glinet_gl-mt3600be` |
-| OpenWrt | `25.12-SNAPSHOT` / `r0+32742-7e35c47c00` |
-| Kernel | `6.12.74` |
-| sysupgrade size | `15,626,525` bytes |
-| sysupgrade SHA-256 | `250186132ffa714d0259cae72fcd7852282f6c2796580bc82d6ce0900dddce86` |
-| initramfs size | `15,009,960` bytes |
-| initramfs SHA-256 | `9fdebcf0a39583e0c07319108963b88d43b571c528cc0d330c0f915e4f90d76b` |
+| Public repository | `yamakenjp/gl-mt3600be-openwrt-builder` |
+| Release | `v25.12-snapshot-20261015.2` |
+| Release source commit | `177cd61df328851f81b59a2d4d6083d4004f4432` |
+| Actions run | `38637683233` |
+| Target / profile | `mediatek/filogic` / `glinet_gl-mt3600be` |
+| Supported device | `glinet,gl-mt3600be` |
+| OpenWrt | `25.12-SNAPSHOT` |
+| Image version code | `r0+32742-7e35c47c00-beryl7.2` |
+| `version.buildinfo` | `r0+32742-243f15be3c` |
+| Kernel | `6.12.74`, release `1`, vermagic `0b3956d720c95a8466f6efe8d7cc7dd8` |
 
-The deployable image is:
+## Firmware images
 
-`output/openwrt-mediatek-filogic-glinet_gl-mt3600be-squashfs-sysupgrade.bin`
+Use the sysupgrade image for a normal update. The initramfs image is for RAM
+boot, recovery, or testing and must not be written as a normal sysupgrade.
 
-## Validation performed
+| Image | Size | SHA-256 |
+|---|---:|---|
+| `openwrt-mediatek-filogic-glinet_gl-mt3600be-squashfs-sysupgrade.bin` | 25,395,485 bytes | `d8451e614fceef1edda799bd41ac9f45c02672d25fc2fb95517ec6073b1c8b42` |
+| `openwrt-mediatek-filogic-glinet_gl-mt3600be-initramfs-kernel.bin` | 23,778,096 bytes | `80d192f44ab95cb034a965a0a8dab4c9159aa6faee82e02f80b5418c124e36bc` |
 
-- Every entry in OpenWrt's `sha256sums` passes.
-- `profiles.json` contains only `glinet_gl-mt3600be`, with supported device `glinet,gl-mt3600be`.
-- The sysupgrade archive contains `CONTROL`, `kernel`, and `root`; `CONTROL` identifies `BOARD=glinet_gl-mt3600be`.
-- Embedded firmware metadata identifies OpenWrt `25.12-SNAPSHOT`, target `mediatek/filogic`, and board `glinet_gl-mt3600be`.
-- The SquashFS contains the MediaTek public-feed `mt76/mac80211` stack, including `mt7996e.ko`, MT7990 firmware, and `mt7996e wed_enable=1` autoload configuration.
-- The SquashFS contains `mtk-2p5ge.ko` and the official MT7987 2.5GbE PHY firmware. Firmware SHA-256 values are:
-  - `i2p5ge-phy-DSPBitTb.bin`: `1f7b7fd1c243576e04c16b98c649db1e3326f6a715556c2a56094bcd7d300d71`
-  - `i2p5ge-phy-pmb.bin`: `941e3118493d5cb14323968ebc1193b23411d7c330a566014eeeb51c5ea7ed45`
-- The internal MediaTek PHY firmware package is absent.
-- LuCI, `relayd`, USB storage, ext4/VFAT support, and USB diagnostic tools are present.
-- `mt_wifi7.ko` is intentionally absent; this build uses MediaTek's public-feed-enhanced `mt76/mac80211` driver stack, not the closed SDK driver.
+After publication, every Release asset was downloaded again and every entry
+in the published `SHA256SUMS` was independently verified successfully.
 
-## Hardware validation performed
+## Automated validation passed
 
-- The sysupgrade image boots on a GL.iNET GL-MT3600BE.
-- Ethernet LAN access, SSH authentication, and LuCI login work.
-- `apk update` works after removing the build-only `mtk_openwrt_feed` entry described below.
-- The official Japanese LuCI translation packages can be installed and selected.
+- The build produced exactly one GL-MT3600BE sysupgrade image and one
+  initramfs image; `profiles.json` contains only the Beryl 7 profile.
+- Tailscale `1.102.3-r1` and its matching kernel `kmod-tun` are present. The
+  Tailscale binary is present in the extracted root filesystem.
+- Japanese LuCI base, firewall, and package-manager translations are built in,
+  with Japanese selected by the first-boot default.
+- The build-only MediaTek feed is recorded for reproducibility but is disabled
+  in the installed runtime repository list, so `apk update` does not request a
+  nonexistent `mtk_openwrt_feed` URL.
+- USB block automount has both `anon_mount=1` and `auto_mount=1`.
+- The extracted root filesystem contains the required `tun`, WireGuard,
+  CAKE, XFRM interface, iPhone tethering, NTFS3, exFAT, USB storage, and UAS
+  kernel modules.
+- The configuration includes Android RNDIS, MBIM, QMI WWAN, iPhone pairing
+  tools, USB Ethernet drivers, IPsec/XFRM/VTI modules, flow offload/WED,
+  EIP/Safexcel crypto acceleration, SQM/CAKE, and WireGuard tools/LuCI.
+- The Beryl 7 DTS contains the requested automatic PWM fan curve: PWM
+  `128/176/224/255` at `50/60/70/80` degrees C, with 5 degrees C hysteresis.
+- OpenWrt target checksums and the workflow's collected-artifact checksums both
+  passed. The SquashFS extraction and rootfs checks ran with sufficient
+  privileges to verify device nodes as well as ordinary files.
 
-Wi-Fi 7 modes, 2.5GbE stability, hardware offload, USB, thermals, power
-consumption, and sustained performance have not yet been exhaustively tested.
+Samba/ksmbd, HFS+, and APFS support are intentionally not included. IPsec
+kernel support is included, but a user-space daemon such as strongSwan is not.
 
-## Known issue in this image
+## Hardware validation status
 
-The image contains a repository entry for the local build feed
-`mtk_openwrt_feed`. That feed is not published by downloads.openwrt.org, so it
-must be removed once after installation:
+This exact `beryl7.2` image has not yet been flashed or hardware-tested. The
+preceding smaller image was successfully booted on the same GL-MT3600BE; wired
+LAN, SSH, LuCI, and `apk update` were confirmed. On that running image, manual
+fan testing measured approximately 3,262 RPM at PWM 128 and 5,601 RPM at PWM
+255, with CPU and 2.5GbE temperatures near 55 degrees C. Those observations
+were used to choose the first active step of the new curve, but the automatic
+curve itself still needs post-upgrade observation.
 
-```sh
-cp -p /etc/apk/repositories.d/distfeeds.list /root/distfeeds.list.bak
-sed -i '/mtk_openwrt_feed/d' /etc/apk/repositories.d/distfeeds.list
-apk update
-```
-
-This does not remove any installed MediaTek driver or package. Do not run a
-blanket `apk upgrade`, and do not force-install official snapshot `kmod-*`
-packages over this custom kernel.
-
-OpenWrt's target-level `openwrt-mediatek-filogic.manifest` describes the common rootfs. The four per-device additions are recorded in `profiles.json`; extraction of the image's APK database additionally confirmed `kmod-mt7990-firmware`, `kmod-mt7996e`, `kmod-hwmon-pwmfan`, and `kmod-usb3` in the actual Beryl 7 rootfs.
+Wi-Fi 7 modes, sustained 2.5GbE traffic, USB tethering/storage, hardware flow
+offload, IPsec, thermals, power use, and long-duration stability remain to be
+validated on `beryl7.2` hardware.
 
 ## Safety status
 
-This image is a custom, partially hardware-tested build. It is neither an OpenWrt official release image nor GL.iNet firmware. It contains no GL.iNet UI or proprietary services. Use only the sysupgrade image for the matching GL-MT3600BE board, preserve recovery access and calibration/MTD backups, and do not treat it as a factory or bootloader image.
+This is a custom pre-release, not an official OpenWrt or GL.iNet firmware. It
+does not include the GL.iNet UI, proprietary services, or the closed
+`mt_wifi7` driver; it uses the MediaTek public-feed-enhanced `mac80211`/`mt76`
+stack. Use it only on a GL.iNet GL-MT3600BE, preserve backup and recovery
+access, do not run blanket `apk upgrade`, and do not force-install official
+snapshot `kmod-*` packages over this custom kernel ABI.
