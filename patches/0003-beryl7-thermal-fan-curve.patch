@@ -1,0 +1,132 @@
+From: Beryl 7 reproducible build <beryl7-build@localhost>
+Subject: [PATCH] mediatek: beryl7: add CPU and 2.5GbE fan curve
+
+Use the verified PWM fan and tachometer to cool against both MT7987 thermal
+zones.  The thermal core combines the cooling requests, so the hotter of the
+CPU and integrated 2.5GbE PHY determines the fan state.
+
+---
+ .../dts/mt7987a-glinet-gl-mt3600be.dts       | 101 ++++++++++++++++++
+ 1 file changed, 101 insertions(+)
+
+diff --git a/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts b/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts
+index 784e134fff..c9540121f5 100644
+--- a/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts
++++ b/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts
+@@ -83,6 +83,7 @@
+ };
+ 
+ &fan {
++	cooling-levels = <0 128 176 224 255>;
+ 	fan-supply = <&fan_3p3v>;
+ 	interrupt-parent = <&pio>;
+ 	interrupts = <5 IRQ_TYPE_EDGE_RISING>;
+@@ -90,6 +91,106 @@
+ 	status = "okay";
+ };
+ 
++&cpu_thermal {
++	trips {
++		beryl7_cpu_fan_1: fan-1 {
++			temperature = <50000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++
++		beryl7_cpu_fan_2: fan-2 {
++			temperature = <60000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++
++		beryl7_cpu_fan_3: fan-3 {
++			temperature = <70000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++
++		beryl7_cpu_fan_4: fan-4 {
++			temperature = <80000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++	};
++
++	cooling-maps {
++		fan-map-1 {
++			cooling-device = <&fan 1 1>;
++			trip = <&beryl7_cpu_fan_1>;
++		};
++
++		fan-map-2 {
++			cooling-device = <&fan 2 2>;
++			trip = <&beryl7_cpu_fan_2>;
++		};
++
++		fan-map-3 {
++			cooling-device = <&fan 3 3>;
++			trip = <&beryl7_cpu_fan_3>;
++		};
++
++		fan-map-4 {
++			cooling-device = <&fan 4 4>;
++			trip = <&beryl7_cpu_fan_4>;
++		};
++	};
++};
++
++&eth2p5g_thermal {
++	trips {
++		beryl7_eth_fan_1: fan-1 {
++			temperature = <50000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++
++		beryl7_eth_fan_2: fan-2 {
++			temperature = <60000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++
++		beryl7_eth_fan_3: fan-3 {
++			temperature = <70000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++
++		beryl7_eth_fan_4: fan-4 {
++			temperature = <80000>;
++			hysteresis = <5000>;
++			type = "active";
++		};
++	};
++
++	cooling-maps {
++		fan-map-1 {
++			cooling-device = <&fan 1 1>;
++			trip = <&beryl7_eth_fan_1>;
++		};
++
++		fan-map-2 {
++			cooling-device = <&fan 2 2>;
++			trip = <&beryl7_eth_fan_2>;
++		};
++
++		fan-map-3 {
++			cooling-device = <&fan 3 3>;
++			trip = <&beryl7_eth_fan_3>;
++		};
++
++		fan-map-4 {
++			cooling-device = <&fan 4 4>;
++			trip = <&beryl7_eth_fan_4>;
++		};
++	};
++};
++
+ &gmac0 {
+ 	nvmem-cells = <&macaddr_factory_4000 0>;
+ 	nvmem-cell-names = "mac-address";
+-- 
+2.47.3

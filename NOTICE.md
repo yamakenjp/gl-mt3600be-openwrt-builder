@@ -1,7 +1,7 @@
 # Upstream software and licensing notice
 
 This repository contains a build recipe, configuration seed, documentation,
-and a small integration patch. It does not vendor the OpenWrt or MediaTek
+and focused integration/backport patches. It does not vendor the OpenWrt or MediaTek
 source trees. The build helper obtains source from the following upstream
 projects at the revisions recorded in `README.md`:
 
@@ -10,6 +10,10 @@ projects at the revisions recorded in `README.md`:
 - OpenWrt packages: <https://github.com/openwrt/packages>
 - LuCI: <https://github.com/openwrt/luci>
 - OpenWrt routing feed: <https://github.com/openwrt/routing>
+
+The Tailscale package recipe is backported from the OpenWrt packages project
+at the revision recorded in `README.md`. The Tailscale source archive fetched
+by that recipe remains subject to Tailscale's upstream licensing terms.
 
 Those projects, the Linux kernel, firmware blobs, packages, and generated
 binary images are covered by their own copyright notices and licenses. Nothing

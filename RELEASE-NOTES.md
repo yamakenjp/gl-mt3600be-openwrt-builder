@@ -1,47 +1,62 @@
 # OpenWrt 25.12-SNAPSHOT for GL.iNET GL-MT3600BE
 
-Tag: `v25.12-snapshot-20261006`
+Tag: `v25.12-snapshot-20261015.2`
 
-OpenWrt 25.12-SNAPSHOTとMediaTek公開feed（MP4.3）を組み合わせた、GL.iNET Beryl 7（GL-MT3600BE）専用のカスタムビルドです。
+OpenWrt 25.12-SNAPSHOTとMediaTek公開feed（MP4.3）を組み合わせた、GL.iNET Beryl 7（GL-MT3600BE）専用の`beryl7.2`カスタムビルドです。これは新しいkernel ABIを持つpre-releaseです。
 
 ## 通常更新に使うファイル
 
 `openwrt-mediatek-filogic-glinet_gl-mt3600be-squashfs-sysupgrade.bin`
 
-- SHA-256: `250186132ffa714d0259cae72fcd7852282f6c2796580bc82d6ce0900dddce86`
-- サイズ: `15,626,525` bytes
-- 対象: `glinet,gl-mt3600be`のみ
+`initramfs-kernel.bin`はRAM起動・復旧・検証向けです。通常のsysupgradeには使わないでください。このReleaseにfactory imageやbootloader / BL2 imageはありません。正確なSHA-256は同じReleaseの`SHA256SUMS`で確認してください。
 
-`initramfs-kernel.bin`はRAM起動・復旧・検証向けです。通常のsysupgradeには使わないでください。このReleaseにfactory imageやbootloader / BL2 imageはありません。
+## `beryl7.2`の追加内容
 
-## 確認済み
+- Tailscale 1.102.3と一致する`kmod-tun`
+- LuCI日本語翻訳を初期イメージへ同梱
+- WireGuard tools/LuCI、veth、SQM/CAKE tools/LuCI、nftables socket/tproxy module
+- Android/iPhone USBテザリング（iPhone pairing toolsを含む）、MBIM/QMI/NCM modem、主要USB Ethernet adapter
+- USB/UAS block-mount、exFAT、kernel NTFS3 read/write
+- IPsec/XFRM/VTIのkernel module（strongSwanなどuser space daemonは未同梱）
+- CPUと2.5GbEの高い温度に追従する4段階PWMファン制御
+- MediaTek flow offload/WED、EIP/Safexcel暗号化支援を維持
+- 存在しない`mtk_openwrt_feed`のruntime URLを無効化
 
-- 実機でのsysupgradeと起動
-- Ethernet LAN、SSH、LuCI
-- APKリポジトリ修正後の`apk update`
-- LuCI日本語パッケージの導入
+ファンカーブは50/60/70/80℃でPWM 128/176/224/255、各段のヒステリシスは5℃です。最初の段は実機で回転を確認したPWM 128を使用しますが、この新しい自動カーブを含むイメージは導入後に改めて確認してください。
 
-Wi-Fi 7、2.5GbE、offload、USB、性能と熱は網羅的には未検証です。
+community版Tailscale LuCI applicationは、固定LuCI revisionに[既知のcommand injection問題](https://github.com/advisories/GHSA-xwc5-mx58-rh35)があるため含めていません。
 
-## 導入直後に必要な修正
+## 更新手順
 
-このイメージにはビルド専用の`mtk_openwrt_feed`行が残っています。最初のSSHログイン後、一度だけ実行してください。
-
-```sh
-cp -p /etc/apk/repositories.d/distfeeds.list /root/distfeeds.list.bak
-sed -i '/mtk_openwrt_feed/d' /etc/apk/repositories.d/distfeeds.list
-apk update
-```
-
-`apk upgrade`の一括実行や、公式snapshotの`kmod-*`の強制導入は避けてください。
-
-## LuCI日本語化（任意）
+現在のOpenWrt設定を引き継ぐ場合も、先にbackupを取得してください。SSHから更新する例です。
 
 ```sh
-apk add luci-i18n-base-ja luci-i18n-firewall-ja luci-i18n-package-manager-ja
-uci set luci.main.lang='ja'
-uci commit luci
-/etc/init.d/uhttpd restart
+scp openwrt-mediatek-filogic-glinet_gl-mt3600be-squashfs-sysupgrade.bin \
+  root@192.168.81.1:/tmp/beryl7.2-sysupgrade.bin
+ssh root@192.168.81.1
+sysupgrade -T /tmp/beryl7.2-sysupgrade.bin
+sysupgrade /tmp/beryl7.2-sysupgrade.bin
 ```
 
-書き込み前に`SHA256SUMS`を照合し、純正ファーム・MTD/calibration情報・復旧経路を確保してください。
+vendor firmwareから移行する場合は設定を保持せず、復旧手段を用意した上で行ってください。初回Releaseからの更新では通常のconfig保持を想定していますが、旧Release用の外部`kmod-*`を残したり再利用したりしないでください。
+
+## Tailscale開始
+
+```sh
+/etc/init.d/tailscale enable
+/etc/init.d/tailscale start
+tailscale up --accept-dns=false
+```
+
+表示されたURLで認証します。Tailscaleのclient自己更新は無効です。
+
+## 重要な注意
+
+- 書き込み前に`shasum -a 256 -c SHA256SUMS`で照合してください。
+- `apk upgrade`の一括実行は避けてください。
+- 公式snapshotの`kmod-*`を強制導入しないでください。
+- GL-MT3600BE以外へ書き込まないでください。
+- 純正ファーム、MTD/calibration情報、U-Boot recoveryまたはserial consoleなどの復旧経路を確保してください。
+- 新しい自動ファン制御、USB機器、IPsec、長時間負荷は導入後の実機確認が必要です。
+
+これはOpenWrt公式ReleaseでもGL.iNet公式ファームでもありません。GL.iNet独自UI、独自service、closed `mt_wifi7` driverは含まず、MediaTek公開feedが拡張した`mac80211`/`mt76` stackを使用します。

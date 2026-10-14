@@ -1,0 +1,153 @@
+name: Build and publish Beryl 7 firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag for this source-pinned build
+        required: true
+        default: v25.12-snapshot-20261015.2
+
+permissions:
+  contents: write
+
+concurrency:
+  group: beryl7-firmware-release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      EXPECTED_RELEASE_TAG: v25.12-snapshot-20261015.2
+      RELEASE_TAG: ${{ inputs.release_tag }}
+
+    steps:
+      - name: Check out the tagged recipe
+        uses: actions/checkout@v4
+
+      - name: Validate release request
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${RELEASE_TAG}" != "${EXPECTED_RELEASE_TAG}" ]]; then
+            printf 'Expected release tag %s, received %s\n' \
+              "${EXPECTED_RELEASE_TAG}" "${RELEASE_TAG}" >&2
+            exit 1
+          fi
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            printf 'Release %s already exists; refusing to replace it.\n' \
+              "${RELEASE_TAG}" >&2
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Prepare the clean build host
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          # These are large, unrelated SDKs preinstalled on the disposable
+          # GitHub runner. Removing only these explicit paths leaves enough
+          # room for the OpenWrt toolchain and build tree.
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo apt-get clean
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            bison build-essential clang file flex gawk gettext git \
+            libelf-dev libncurses-dev libssl-dev python3 \
+            python3-pyelftools python3-setuptools rsync squashfs-tools \
+            swig unzip wget zlib1g-dev
+          df -h .
+
+      - name: Build the firmware
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          JOBS=2 DOWNLOAD_JOBS=4 AUTOREMOVE=1 \
+            bash ./build-beryl7-mtk.sh
+
+      - name: Verify release contents
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd output-repro
+          sha256sum --check SHA256SUMS
+
+          mapfile -t sysupgrade_images < <(
+            find . -maxdepth 1 -type f \
+              -name '*glinet_gl-mt3600be*squashfs-sysupgrade.bin' -print
+          )
+          mapfile -t initramfs_images < <(
+            find . -maxdepth 1 -type f \
+              -name '*glinet_gl-mt3600be*initramfs-kernel.bin' -print
+          )
+          [[ ${#sysupgrade_images[@]} -eq 1 ]]
+          [[ ${#initramfs_images[@]} -eq 1 ]]
+
+          grep -Fqx \
+            'CONFIG_VERSION_CODE="r0+32742-7e35c47c00-beryl7.2"' \
+            openwrt.config
+          for package in \
+              tailscale kmod-tun kmod-wireguard wireguard-tools \
+              luci-proto-wireguard kmod-veth kmod-sched-cake \
+              sqm-scripts luci-app-sqm \
+              kmod-crypto-eip kmod-crypto-hw-safexcel \
+              kmod-nf-flow kmod-nf-flow-netlink kmod-nft-offload \
+              netfilter-flowtable mtkhnat_util \
+              kmod-ipsec4 kmod-ipsec6 kmod-xfrm-interface \
+              kmod-usb-net-rndis kmod-usb-net-cdc-mbim \
+              kmod-usb-net-qmi-wwan kmod-usb-net-ipheth \
+              usbmuxd libimobiledevice-utils \
+              kmod-fs-exfat kmod-fs-ntfs3 kmod-usb-storage-uas block-mount \
+              luci-i18n-base-ja luci-i18n-firewall-ja \
+              luci-i18n-package-manager-ja; do
+            grep -Fqx "CONFIG_PACKAGE_${package}=y" openwrt.config
+          done
+
+          manifest="$(find . -maxdepth 1 -type f -name '*.manifest' -print -quit)"
+          [[ -n "${manifest}" ]]
+          grep -Eq '^tailscale - 1\.102\.3([.-]|$)' "${manifest}"
+          grep -Eq '^kmod-tun - ' "${manifest}"
+
+          root_entry="$({
+            tar -tf "${sysupgrade_images[0]}" | \
+              awk '/\/root$/ { print; exit }'
+          })"
+          [[ -n "${root_entry}" ]]
+          root_image="${RUNNER_TEMP}/beryl7-root.squashfs"
+          rootfs_dir="${RUNNER_TEMP}/beryl7-rootfs"
+          tar -xOf "${sysupgrade_images[0]}" "${root_entry}" >"${root_image}"
+          unsquashfs -no-progress -d "${rootfs_dir}" "${root_image}" >/dev/null
+
+          test -x "${rootfs_dir}/usr/sbin/tailscaled"
+          test -x "${rootfs_dir}/etc/uci-defaults/99-beryl7-luci-ja"
+          grep -Fqx "uci -q set luci.main.lang='ja'" \
+            "${rootfs_dir}/etc/uci-defaults/99-beryl7-luci-ja"
+          if grep -Eq '^[[:space:]]*[^#].*mtk_openwrt_feed' \
+              "${rootfs_dir}/etc/apk/repositories.d/distfeeds.list"; then
+            echo 'The build-only MediaTek feed is active in the image.' >&2
+            exit 1
+          fi
+          for module in \
+              tun.ko wireguard.ko sch_cake.ko xfrm_interface.ko \
+              ipheth.ko ntfs3.ko uas.ko; do
+            find "${rootfs_dir}/lib/modules" -type f -name "${module}" \
+              -print -quit | grep -q .
+          done
+
+      - name: Publish the immutable pre-release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh release create "${RELEASE_TAG}" output-repro/* \
+            --target "${GITHUB_SHA}" \
+            --title "Beryl 7 OpenWrt 25.12 + MediaTek (${RELEASE_TAG})" \
+            --notes-file RELEASE-NOTES.md \
+            --prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
