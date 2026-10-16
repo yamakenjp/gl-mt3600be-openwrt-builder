@@ -58,19 +58,46 @@ kernel support is included, but a user-space daemon such as strongSwan is not.
 
 ## Hardware validation status
 
-This exact `beryl7.3` image has not yet been flashed. The preceding `beryl7.2`
-image booted on the same GL-MT3600BE, and wired LAN, SSH, LuCI, Japanese UI,
-`apk update`, Tailscale, and fan speed control were confirmed.
+The exact published `beryl7.3` sysupgrade image was flashed to a
+GL-MT3600BE on 2026-10-16 with settings preserved. Its SHA-256 matched the
+Release, the on-device `sysupgrade -T` image check passed, and the router
+rebooted successfully into
+`OpenWrt 25.12-SNAPSHOT r0+32742-7e35c47c00-beryl7.3`.
 
-On `beryl7.2`, the router failed to enumerate a healthy SanDisk 1 TB USB
-storage device, while the same device enumerated as UAS and its ext4 filesystem
-was readable on another Linux host. A USB hub on the router appeared only as a
-480 Mbps USB 2 hub. That evidence led to the board-specific USB 3 device-tree
-fix in `beryl7.3`. USB 3 speed, UAS, `/dev/sda1`, and automatic mounting still
-require post-upgrade hardware confirmation.
+Post-upgrade hardware checks passed for:
 
-Wi-Fi 7 modes, sustained 2.5GbE traffic, hardware flow offload, USB tethering,
-IPsec, thermals, power use, and long-duration stability remain to be validated.
+- wired LAN and WAN, both configured wireless radios, key-only SSH, LuCI, and
+  the Japanese login UI;
+- `apk update` with all official indexes available and no active
+  `mtk_openwrt_feed` runtime repository;
+- Tailscale service/state preservation, TUN, nftables mode, direct peer
+  connectivity, UDP, IPv4, and IPv6;
+- the USB 3 xHCI root hub at `20000M/x2`, with a SanDisk USB 3 storage device
+  attached at `5000M` using the `uas` driver;
+- ext4 detection and automatic mounting at `/mnt/sda1` with
+  `anon_mount=1` and `auto_mount=1`;
+- a read-only 256 MiB block-device read, with no new USB reset or I/O error;
+- automatic fan control at PWM 176 / approximately 4240 RPM while the CPU and
+  2.5GbE thermal zones were approximately 60-61 degrees Celsius; and
+- the requested USB tethering, IPsec/XFRM/VTI, nft flow-offload, and
+  Safexcel-related package/module inventory.
+
+The retained pre-upgrade LuCI configuration selected an OpenWrt2020 theme that
+is not included in this image. LuCI correctly fell back to Bootstrap, after
+which the stale theme selection was changed to Bootstrap and the Japanese UI
+was rechecked.
+
+Two xHCI diagnostics saying `Transfer event 26 for unknown stream ring` were
+logged during initial UAS enumeration. The device remained mounted, the
+read-only transfer passed, and no reset or I/O error followed. Long-duration
+storage monitoring is still recommended.
+
+Actual phone/modem tethering, a configured IPsec tunnel, sustained hardware
+flow-offload throughput, full Wi-Fi 7 mode/performance coverage, sustained
+2.5GbE traffic, power use, and long-duration stability remain to be validated.
+The fw4 flowtable is available but was intentionally not enabled during this
+test. IPsec kernel support is present; its user-space daemon is still not
+included.
 
 ## Safety status
 
