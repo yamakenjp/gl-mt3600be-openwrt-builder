@@ -10,7 +10,7 @@ OpenWrt 25.12-SNAPSHOTとMediaTek公開feed（MP4.3）を組み合わせた、GL
 
 `initramfs-kernel.bin`はRAM起動・復旧・検証向けです。通常のsysupgradeには使わないでください。このReleaseにfactory imageやbootloader / BL2 imageはありません。正確なSHA-256は同じReleaseの`SHA256SUMS`で確認してください。
 
-通常更新用sysupgradeのサイズ、SHA-256、GitHub Actions run IDは、検査合格後にこのRelease本文へ自動追記されます。正確な値は同じReleaseの`SHA256SUMS`でも確認してください。
+通常更新用sysupgradeは25,395,485 bytes、SHA-256は`5693bc7319ba50582ad6b3a953c3b555880e88d2801d7e4dfc019ed39a9f656f`です。[GitHub Actions build 38872836755](https://github.com/yamakenjp/gl-mt3600be-openwrt-builder/actions/runs/38872836755)は全検査を通過しました。公開後に全Release資産を再ダウンロードし、`SHA256SUMS`との一致も確認しています。詳細は同じReleaseの`BUILD-RESULT.md`を参照してください。
 
 ## `beryl7.3`の追加・修正内容
 
