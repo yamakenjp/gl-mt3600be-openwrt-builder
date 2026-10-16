@@ -22,16 +22,24 @@ grep 'squashfs-sysupgrade\.bin$' SHA256SUMS | shasum -a 256 -c -
 
 ## 実機確認状況
 
-初回Release（`v25.12-snapshot-20261006`）のsysupgradeイメージはGL-MT3600BE実機で次を確認済みです。
+`v25.12-snapshot-20261016.3`で公開した`beryl7.3`のsysupgradeイメージを
+GL-MT3600BE実機へ設定保持で導入し、正常起動を確認済みです。
 
-- sysupgrade後の起動
-- Ethernet LAN経由のSSHログイン
-- LuCIへのログイン
-- 後述のローカルfeed行を除去した後の`apk update`
-- LuCI日本語翻訳パッケージの追加
-- PWM 128で約3262 RPM、PWM 255で約5601 RPMとなるファン可変制御
+- Ethernet LAN / WAN、両wireless radio、SSH、LuCI日本語画面
+- `apk update`（無効なMediaTek runtime feedへのアクセスなし）
+- Tailscale、TUN、nftables、UDP、peerとの直接接続
+- USB 3 root hub、5 Gbps接続、UAS、ext4の自動マウント
+- USBストレージからのread-only 256 MiB読み出し（reset / I/O errorなし）
+- CPU / 2.5GbE温度連動の自動ファン制御
+- USBテザリング、IPsec/XFRM/VTI、flow offload、Safexcelのpackage/module搭載
 
-`beryl7.2`は同じ実機で起動し、Tailscale接続とファン回転を確認済みです。一方、正常なSanDisk 1 TB USBストレージがBeryl 7では列挙されず、Device TreeでSuperSpeed PHYがUSB controllerへ接続されていないことを切り分けました。`beryl7.3`はこの修正を含むため、USB 3接続と自動マウントは導入後に再確認します。Wi-Fi 7の全モード、2.5GbEの長時間安定性、hardware offload、性能・熱・消費電力も網羅的には検証していません。
+保持されていた旧`openwrt2020`テーマ設定は、このイメージに同テーマが
+入っていないためBootstrapへ変更しました。実測値、USBログ上の注意点、
+未検証項目は[`BUILD-RESULT.md`](BUILD-RESULT.md)に記録しています。
+
+実機を用いた電話・モデムのUSBテザリング、IPsec tunnel、hardware
+flow-offloadの性能、Wi-Fi 7全モード、2.5GbE長時間負荷、消費電力、
+長期安定性は引き続き未検証です。
 
 ## 固定しているソース
 
