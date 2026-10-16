@@ -1,0 +1,28 @@
+From: Beryl 7 reproducible build <beryl7-build@localhost>
+Subject: [PATCH] mediatek: beryl7: enable the SuperSpeed USB PHY
+
+The MT7987 base device tree disables its USB 3 port and connects only the
+USB 2 PHY.  Override both settings for the Beryl 7, whose external USB port
+is wired for SuperSpeed.  This matches the vendor board device tree and the
+upstream Banana Pi R4 Lite configuration using the same MT7987 controller.
+
+---
+ .../dts/mt7987a-glinet-gl-mt3600be.dts        | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts b/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts
+index 784e134fff..3e840b351c 100644
+--- a/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts
++++ b/target/linux/mediatek/dts/mt7987a-glinet-gl-mt3600be.dts
+@@ -277,6 +277,9 @@
+ };
+ 
+ &ssusb {
++	mediatek,u3p-dis-msk = <0>;
++	phys = <&tphyu2port0 PHY_TYPE_USB2>,
++	       <&tphyu3port0 PHY_TYPE_USB3>;
+ 	vbus-supply = <&usb_vbus>;
+ 	status = "okay";
+ };
+-- 
+2.47.3

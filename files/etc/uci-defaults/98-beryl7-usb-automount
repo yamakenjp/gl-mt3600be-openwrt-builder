@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# Preserve existing per-device mount entries while migrating configurations
+# retained across sysupgrade to the Beryl 7 USB automount defaults.
+if ! uci -q get 'fstab.@global[0]' >/dev/null; then
+	uci -q add fstab global >/dev/null || exit 1
+fi
+
+uci -q set 'fstab.@global[0].anon_mount=1' || exit 1
+uci -q set 'fstab.@global[0].auto_mount=1' || exit 1
+uci -q commit fstab || exit 1
+
+exit 0

@@ -1,12 +1,17 @@
 name: Build and publish Beryl 7 firmware
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/release-trigger
   workflow_dispatch:
     inputs:
       release_tag:
         description: Release tag for this source-pinned build
         required: true
-        default: v25.12-snapshot-20261015.2
+        default: v25.12-snapshot-20261016.3
 
 permissions:
   contents: read
@@ -21,8 +26,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      EXPECTED_RELEASE_TAG: v25.12-snapshot-20261015.2
-      RELEASE_TAG: ${{ inputs.release_tag }}
+      EXPECTED_RELEASE_TAG: v25.12-snapshot-20261016.3
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || 'v25.12-snapshot-20261016.3' }}
 
     steps:
       - name: Check out the tagged recipe
@@ -38,6 +43,14 @@ jobs:
             printf 'Expected release tag %s, received %s\n' \
               "${EXPECTED_RELEASE_TAG}" "${RELEASE_TAG}" >&2
             exit 1
+          fi
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            trigger_tag="$(tr -d '\r\n' <.github/release-trigger)"
+            if [[ "${trigger_tag}" != "${EXPECTED_RELEASE_TAG}" ]]; then
+              printf 'Release trigger contains %s, expected %s\n' \
+                "${trigger_tag}" "${EXPECTED_RELEASE_TAG}" >&2
+              exit 1
+            fi
           fi
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             printf 'Release %s already exists; refusing to replace it.\n' \
@@ -158,7 +171,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      RELEASE_TAG: ${{ inputs.release_tag }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || 'v25.12-snapshot-20261016.3' }}
     permissions:
       actions: read
       contents: write
@@ -190,7 +203,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends squashfs-tools
+          sudo apt-get install --yes --no-install-recommends \
+            device-tree-compiler squashfs-tools
 
       - name: Verify release contents
         shell: bash
@@ -211,7 +225,7 @@ jobs:
           [[ ${#initramfs_images[@]} -eq 1 ]]
 
           grep -Fqx \
-            'CONFIG_VERSION_CODE="r0+32742-7e35c47c00-beryl7.2"' \
+            'CONFIG_VERSION_CODE="r0+32742-7e35c47c00-beryl7.3"' \
             openwrt.config
           for package in \
               tailscale kmod-tun kmod-wireguard wireguard-tools \
@@ -254,6 +268,14 @@ jobs:
             "${root_image}" >/dev/null
 
           test -x "${rootfs_dir}/usr/sbin/tailscaled"
+          test -x \
+            "${rootfs_dir}/etc/uci-defaults/98-beryl7-usb-automount"
+          grep -Fqx \
+            "uci -q set 'fstab.@global[0].anon_mount=1' || exit 1" \
+            "${rootfs_dir}/etc/uci-defaults/98-beryl7-usb-automount"
+          grep -Fqx \
+            "uci -q set 'fstab.@global[0].auto_mount=1' || exit 1" \
+            "${rootfs_dir}/etc/uci-defaults/98-beryl7-usb-automount"
           test -x "${rootfs_dir}/etc/uci-defaults/99-beryl7-luci-ja"
           grep -Fqx "uci -q set luci.main.lang='ja'" \
             "${rootfs_dir}/etc/uci-defaults/99-beryl7-luci-ja"
@@ -282,14 +304,41 @@ jobs:
             fi
           done
 
+          board_dtb="${RUNNER_TEMP}/beryl7-board.dtb"
+          fdtget -t bx "${initramfs_images[0]}" /images/fdt-1 data | \
+            python3 -c \
+              'import sys; sys.stdout.buffer.write(bytes(int(x, 16) for x in sys.stdin.read().split()))' \
+              >"${board_dtb}"
+          test "$(fdtget -t x "${board_dtb}" \
+            /soc/usb@11200000 mediatek,u3p-dis-msk)" = "0"
+          read -r -a usb_phys <<<"$(fdtget -t x "${board_dtb}" \
+            /soc/usb@11200000 phys)"
+          [[ ${#usb_phys[@]} -eq 4 ]]
+          [[ "${usb_phys[1]}" == "3" ]]
+          [[ "${usb_phys[3]}" == "4" ]]
+
       - name: Publish the immutable pre-release
         shell: bash
         run: |
           set -Eeuo pipefail
+          sysupgrade_image="$(find output-repro -maxdepth 1 -type f \
+            -name '*glinet_gl-mt3600be*squashfs-sysupgrade.bin' \
+            -print -quit)"
+          [[ -n "${sysupgrade_image}" ]]
+          release_notes="${RUNNER_TEMP}/beryl7-release-notes.md"
+          cp RELEASE-NOTES.md "${release_notes}"
+          {
+            printf '\n## CIで検証した通常更新用イメージ\n\n'
+            printf -- '- ファイル: `%s`\n' "$(basename "${sysupgrade_image}")"
+            printf -- '- サイズ: `%s bytes`\n' "$(stat -c '%s' "${sysupgrade_image}")"
+            printf -- '- SHA-256: `%s`\n' \
+              "$(sha256sum "${sysupgrade_image}" | awk '{print $1}')"
+            printf -- '- Actions run: `%s`\n' "${GITHUB_RUN_ID}"
+          } >>"${release_notes}"
           gh release create "${RELEASE_TAG}" output-repro/* \
             --target "${GITHUB_SHA}" \
             --title "Beryl 7 OpenWrt 25.12 + MediaTek (${RELEASE_TAG})" \
-            --notes-file RELEASE-NOTES.md \
+            --notes-file "${release_notes}" \
             --prerelease
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,6 +1,6 @@
 # GL-MT3600BE: OpenWrt 25.12 + MediaTek public feed
 
-GL.iNET Beryl 7（GL-MT3600BE）向けの、ソースrevisionを固定したカスタムOpenWrtビルド一式です。OpenWrt 25.12を基点に、MediaTek公開feedのWi-Fi 7 / Filogic変更と、OpenWrt公式のBeryl 7デバイス定義を組み合わせます。現在のビルド番号は`beryl7.2`、Release tagは`v25.12-snapshot-20261015.2`です。
+GL.iNET Beryl 7（GL-MT3600BE）向けの、ソースrevisionを固定したカスタムOpenWrtビルド一式です。OpenWrt 25.12を基点に、MediaTek公開feedのWi-Fi 7 / Filogic変更と、OpenWrt公式のBeryl 7デバイス定義を組み合わせます。現在のビルド番号は`beryl7.3`、Release tagは`v25.12-snapshot-20261016.3`です。
 
 これはGL.iNET公式ファームではありません。GL.iNET独自UI・独自サービス・クローズドな`mt_wifi7` vendor driverは入りません。Wi-FiはMediaTek公開feedが拡張した`mac80211` / `mt76`系です。
 
@@ -31,7 +31,7 @@ grep 'squashfs-sysupgrade\.bin$' SHA256SUMS | shasum -a 256 -c -
 - LuCI日本語翻訳パッケージの追加
 - PWM 128で約3262 RPM、PWM 255で約5601 RPMとなるファン可変制御
 
-`beryl7.2`は同じ機種・同じOpenWrt基点からkernel ABIを更新したpre-releaseです。Tailscale、追加kernel module、自動ファンカーブを組み込んだイメージ自体の実機検証は、ビルド後の導入時に改めて行う必要があります。Wi-Fi 7の全モード、2.5GbEの長時間安定性、hardware offload、USB、性能・熱・消費電力も網羅的には検証していません。
+`beryl7.2`は同じ実機で起動し、Tailscale接続とファン回転を確認済みです。一方、正常なSanDisk 1 TB USBストレージがBeryl 7では列挙されず、Device TreeでSuperSpeed PHYがUSB controllerへ接続されていないことを切り分けました。`beryl7.3`はこの修正を含むため、USB 3接続と自動マウントは導入後に再確認します。Wi-Fi 7の全モード、2.5GbEの長時間安定性、hardware offload、性能・熱・消費電力も網羅的には検証していません。
 
 ## 固定しているソース
 
@@ -54,6 +54,8 @@ grep 'squashfs-sysupgrade\.bin$' SHA256SUMS | shasum -a 256 -c -
 - WireGuard tools/LuCI、veth、SQM/CAKE tools/LuCI、nftables socket/tproxy
 - Android/iPhone USBテザリング（iPhone pairing toolsを含む）、MBIM/QMI/NCMモデム、主要USB Ethernet adapter
 - USB/UASストレージ、block-mount、ext4/VFAT/exFAT、kernel NTFS3 read/write
+- Beryl 7のUSB controllerへUSB 2 / USB 3 PHYを接続するDevice Tree修正
+- sysupgradeで保持されたfstabの既存mount entryを残したまま、匿名USB automountを有効化するUCI migration
 - IPsec/XFRM/VTIのkernel側（strongSwanなどのuser space daemonは未同梱）
 - MediaTek flow offload/WED、EIP/Safexcel暗号化支援
 - CPUと2.5GbE温度に連動するPWMファン制御
@@ -62,7 +64,7 @@ HQA / デバッグ用途のパッケージは外しています。MT7988専用�
 
 Beryl 7の公式デバイス定義が選ぶ`mt7987-2p5g-phy-firmware`と、MediaTek公開feedの2.5GbE driver `kmod-mt798x-2p5g-phy`を組み合わせます。MediaTek側driverの依存先を内部版firmwareから公式MT7987 firmwareへ変更する処理は、[`patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.patch`](patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.patch)として明示しています。
 
-Tailscale更新は[`patches/0002-tailscale-1.102.3.patch`](patches/0002-tailscale-1.102.3.patch)、自動ファンカーブは[`patches/0003-beryl7-thermal-fan-curve.patch`](patches/0003-beryl7-thermal-fan-curve.patch)、Tailscaleの最低要件を満たすGo 1.26.9更新は[`patches/0004-golang-1.26.9.patch`](patches/0004-golang-1.26.9.patch)として分離しています。ファンはCPUまたは2.5GbEの高い方を基準に、50/60/70/80℃でPWM 128/176/224/255へ上げ、各段に5℃のヒステリシスを持たせます。最初の段には実機で回転を確認したPWM 128を使用します。
+Tailscale更新は[`patches/0002-tailscale-1.102.3.patch`](patches/0002-tailscale-1.102.3.patch)、自動ファンカーブは[`patches/0003-beryl7-thermal-fan-curve.patch`](patches/0003-beryl7-thermal-fan-curve.patch)、Tailscaleの最低要件を満たすGo 1.26.9更新は[`patches/0004-golang-1.26.9.patch`](patches/0004-golang-1.26.9.patch)、USB 3 PHY有効化は[`patches/0005-beryl7-enable-usb3.patch`](patches/0005-beryl7-enable-usb3.patch)として分離しています。ファンはCPUまたは2.5GbEの高い方を基準に、50/60/70/80℃でPWM 128/176/224/255へ上げ、各段に5℃のヒステリシスを持たせます。最初の段には実機で回転を確認したPWM 128を使用します。
 
 ここでいう「ソース固定」は取得revisionを固定するという意味です。ホストtoolchain、署名鍵、commit timestampなども含めたbit-for-bit reproducible buildは保証しません。
 
@@ -136,7 +138,7 @@ apk update
 
 ### LuCIの日本語化
 
-`beryl7.2`には日本語翻訳を組み込み、日本語を初回boot時の既定値にします。初回Releaseへ後から追加する場合は次を実行します。
+`beryl7.3`には日本語翻訳を組み込み、日本語を初回boot時の既定値にします。初回Releaseへ後から追加する場合は次を実行します。
 
 ```sh
 apk add luci-i18n-base-ja luci-i18n-firewall-ja luci-i18n-package-manager-ja
@@ -147,7 +149,7 @@ uci commit luci
 
 ### Tailscale
 
-`beryl7.2`はTailscale 1.102.3と一致する`kmod-tun`を同梱します。community LuCI applicationは[既知のcommand injection問題](https://github.com/advisories/GHSA-xwc5-mx58-rh35)がある固定revisionのため採用せず、公式CLIを使用します。
+`beryl7.3`はTailscale 1.102.3と一致する`kmod-tun`を同梱します。community LuCI applicationは[既知のcommand injection問題](https://github.com/advisories/GHSA-xwc5-mx58-rh35)がある固定revisionのため採用せず、公式CLIを使用します。
 
 ```sh
 /etc/init.d/tailscale enable
@@ -173,7 +175,7 @@ cat /sys/class/hwmon/hwmon*/fan1_input 2>/dev/null
 - `apk upgrade`による一括更新は行わないでください。
 - 公式snapshotの`kmod-*`を強制導入しないでください。このカスタムkernelとABIが一致しない場合があります。
 - 必要なユーザー空間パッケージだけを、依存関係を確認して`apk add <package>`で追加してください。
-- 初回Release用に配布したkernel moduleを`beryl7.2`へ流用しないでください。kernel ABIが変わるため、新しいsysupgradeイメージ内のmodule一式を使用します。
+- 旧Release用に配布したkernel moduleを`beryl7.3`へ流用しないでください。kernel ABIが変わる場合があるため、新しいsysupgradeイメージ内のmodule一式を使用します。
 
 ## 書き込み前の安全確認
 

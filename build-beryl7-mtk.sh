@@ -33,6 +33,7 @@ MTK_2P5G_PATCH="${SCRIPT_DIR}/patches/0001-mtk-2p5g-use-openwrt-mt7987-firmware.
 TAILSCALE_PATCH="${SCRIPT_DIR}/patches/0002-tailscale-1.102.3.patch"
 FAN_CURVE_PATCH="${SCRIPT_DIR}/patches/0003-beryl7-thermal-fan-curve.patch"
 GOLANG_PATCH="${SCRIPT_DIR}/patches/0004-golang-1.26.9.patch"
+USB3_PATCH="${SCRIPT_DIR}/patches/0005-beryl7-enable-usb3.patch"
 OPENWRT_DIR="${WORK_DIR}/openwrt"
 MTK_FEED_DIR="${WORK_DIR}/mtk-openwrt-feeds"
 JOBS="${JOBS:-2}"
@@ -94,6 +95,7 @@ done
 [[ -f "${TAILSCALE_PATCH}" ]] || die "Tailscale backport patch not found: ${TAILSCALE_PATCH}"
 [[ -f "${FAN_CURVE_PATCH}" ]] || die "Beryl 7 fan curve patch not found: ${FAN_CURVE_PATCH}"
 [[ -f "${GOLANG_PATCH}" ]] || die "Go backport patch not found: ${GOLANG_PATCH}"
+[[ -f "${USB3_PATCH}" ]] || die "Beryl 7 USB 3 patch not found: ${USB3_PATCH}"
 [[ "${WORK_DIR}" != "/" ]] || die "WORK_DIR must not be /"
 [[ "${WORK_DIR}" != "${HOME:-/nonexistent}" ]] || die "WORK_DIR must not be the home directory"
 
@@ -302,9 +304,31 @@ for fan_trip in 50000 60000 70000 80000; do
         die "The expected Beryl 7 fan trip is missing: ${fan_trip}"
 done
 
+note "Enabling the Beryl 7 SuperSpeed USB PHY"
+if patch --dry-run --batch --forward -p1 -d "${OPENWRT_DIR}" \
+        <"${USB3_PATCH}" >/dev/null 2>&1; then
+    patch --batch --forward -p1 -d "${OPENWRT_DIR}" <"${USB3_PATCH}"
+elif patch --dry-run --batch --reverse -p1 -d "${OPENWRT_DIR}" \
+        <"${USB3_PATCH}" >/dev/null 2>&1; then
+    note "The Beryl 7 USB 3 patch is already applied"
+else
+    die "The Beryl 7 USB 3 patch is neither applicable nor already applied"
+fi
+
+grep -Fqx $'\tmediatek,u3p-dis-msk = <0>;' "${beryl7_dts}" || \
+    die "The Beryl 7 USB 3 port remains disabled"
+grep -Fqx $'\tphys = <&tphyu2port0 PHY_TYPE_USB2>,' "${beryl7_dts}" || \
+    die "The Beryl 7 USB 2 PHY reference is missing"
+grep -Fqx $'\t       <&tphyu3port0 PHY_TYPE_USB3>;' "${beryl7_dts}" || \
+    die "The Beryl 7 USB 3 PHY reference is missing"
+
 note "Installing the Beryl 7 root filesystem defaults"
 mkdir -p "${OPENWRT_DIR}/files"
 rsync --archive "${FILES_OVERLAY}/" "${OPENWRT_DIR}/files/"
+[[ -x "${OPENWRT_DIR}/files/etc/uci-defaults/98-beryl7-usb-automount" ]] || \
+    die "The USB automount configuration migration is not executable"
+sh -n "${OPENWRT_DIR}/files/etc/uci-defaults/98-beryl7-usb-automount" || \
+    die "The USB automount configuration migration has invalid shell syntax"
 [[ -x "${OPENWRT_DIR}/files/etc/uci-defaults/99-beryl7-luci-ja" ]] || \
     die "The Japanese LuCI first-boot default is not executable"
 
@@ -312,7 +336,7 @@ note "Selecting only the GL.iNET GL-MT3600BE image"
 install -m 0644 "${CONFIG_SEED}" "${OPENWRT_DIR}/.config"
 make -C "${OPENWRT_DIR}" defconfig
 
-grep -Fqx 'CONFIG_VERSION_CODE="r0+32742-7e35c47c00-beryl7.2"' \
+grep -Fqx 'CONFIG_VERSION_CODE="r0+32742-7e35c47c00-beryl7.3"' \
     "${OPENWRT_DIR}/.config" || \
     die "Unexpected firmware version code after make defconfig"
 grep -Fqx 'CONFIG_FEED_mtk_openwrt_feed=m' "${OPENWRT_DIR}/.config" || \
